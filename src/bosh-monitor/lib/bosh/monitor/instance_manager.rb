@@ -103,7 +103,7 @@ module Bosh::Monitor
       count
     end
 
-    def analyze_agent(agent)
+    def analyze_agent(agent, agents_to_resurrect = [])
       ts = Time.now.to_i
 
       if agent.timed_out? && agent.rogue?
@@ -124,6 +124,7 @@ module Bosh::Monitor
                            deployment: agent.deployment,
                            job: agent.job,
                            instance_id: agent.instance_id)
+         agents_to_resurrect << agent
       end
 
       if agent.rogue?
@@ -143,17 +144,24 @@ module Bosh::Monitor
       count = 0
 
       @deployment_name_to_deployments.values.each do |deployment|
+        instances_to_resurrect = []
         deployment.instances.each do |instance|
-          analyze_instance(instance)
+          analyze_instance(instance, instances_to_resurrect)
           count += 1
         end
+
+        jobs_to_instances = Hash.new { |h,k| h[k] = [] }
+        instances_to_resurrect.each do |instance|
+          jobs_to_instances[instance.job] << instance.id
+        end
+        generate_resurrector_alert(deployment, jobs_to_instances)
       end
 
       @logger.info('Analyzed %s, took %s seconds' % [pluralize(count, 'instance'), Time.now - started])
       count
     end
 
-    def analyze_instance(instance)
+    def analyze_instance(instance, instances_to_resurrect = [])
       if instance.expects_vm? && !instance.has_vm?
         @processor.process(:alert,
                            severity: 2,
@@ -164,6 +172,7 @@ module Bosh::Monitor
                            deployment: instance.deployment,
                            job: instance.job,
                            instance_id: instance.id)
+        instances_to_resurrect << instance
       end
 
       true
@@ -220,6 +229,19 @@ module Bosh::Monitor
     end
 
     private
+
+    def generate_resurrector_alert(deployment, jobs_to_instance_ids)
+      unless jobs_to_instance_ids.empty?
+        @processor.process(:alert,
+          severity: 2,
+          category: Events::Alert::CATEGORY_DEPLOYMENT_HEALTH,
+          source: deployment.name,
+          title: "#{deployment.name} has problems",
+          created_at: Time.now.to_i,
+          deployment: deployment,
+          jobs_to_instance_ids: jobs_to_instance_ids)
+      end
+    end
 
     def lookup_plugin(name, options = {})
       plugin_class = nil
@@ -295,10 +317,17 @@ module Bosh::Monitor
     def analyze_deployment_agents
       count = 0
       @deployment_name_to_deployments.values.each do |deployment|
+        agents_to_resurrect = []
         deployment.agents.each do |agent|
-          analyze_agent(agent)
+          analyze_agent(agent, agents_to_resurrect)
           count += 1
         end
+
+        jobs_to_instances = Hash.new { |h,k| h[k] = [] }
+        agents_to_resurrect.each do |agent|
+          jobs_to_instances[agent.job] << agent.instance_id
+        end
+        generate_resurrector_alert(deployment, jobs_to_instances)
       end
       count
     end
