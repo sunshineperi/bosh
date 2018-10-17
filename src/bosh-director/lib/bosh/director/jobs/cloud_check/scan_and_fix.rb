@@ -19,7 +19,7 @@ module Bosh::Director
           @deployment_manager = Api::DeploymentManager.new
           @instance_manager = Bosh::Director::Api::InstanceManager.new
           @deployment = @deployment_manager.find_by_name(deployment_name)
-          @jobs = jobs # [[j1, i1], [j1, i2], [j2, i1], [j2, i2], ...]
+          @jobs = jobs # [[j1, i1]]
           @fix_stateful_jobs = fix_stateful_jobs
         end
 
@@ -30,7 +30,9 @@ module Bosh::Director
           error_message = nil
 
           begin
-            with_deployment_lock(@deployment, :timeout => 0) do
+            # TODO no code path has more than one element in jobs
+            instance_id = @jobs[0][1]
+            with_instance_lock(@deployment.name, instance_id, timeout: 0) do
 
               scanner = ProblemScanner::Scanner.new(@deployment)
               scanner.reset(jobs)
@@ -48,9 +50,9 @@ module Bosh::Director
               raise Bosh::Director::ProblemHandlerError, error_message
             end
 
-            'scan and fix complete'
+            "scan and fix complete #{@deployment.name}/#{instance_id}"
           rescue Lock::TimeoutError
-            raise 'Unable to get deployment lock, maybe a deployment is in progress. Try again later.'
+            raise "Unable to get deployment lock for #{@deployment.name}/#{instance_id}, maybe a deployment is in progress. Try again later."
           end
         end
 

@@ -11,13 +11,31 @@ module Bosh::Director
       @test_instance = TestClass.new
     end
 
+    describe :with_instance_lock do
+      it 'should lock instance' do
+        lock = double(:lock)
+        allow(Lock).to receive(:new).and_return(lock)
+        allow(lock).to receive(:lock).and_yield
+
+        called = false
+        @test_instance.with_instance_lock('bar', 1, timeout: 5) do
+          called = true
+        end
+
+        expect(Lock).to have_received(:new).with('lock:deployment:bar:instance:1', { timeout: 5, deployment_name: 'bar', blocked_by: "lock:deployment:bar" })
+        expect(lock).to have_received(:lock)
+        expect(called).to be(true)
+      end
+
+    end
+
     describe :with_deployment_lock do
       it 'should support a deployment model or plan' do
         deployment = double(:deployment)
         allow(deployment).to receive(:name).and_return('foo')
 
         lock = double(:lock)
-        allow(Lock).to receive(:new).with('lock:deployment:foo', { timeout: 10, deployment_name: 'foo' }).
+        allow(Lock).to receive(:new).with('lock:deployment:foo', timeout: 10, deployment_name: 'foo', blocked_by: 'lock:deployment:foo:instance:%').
           and_return(lock)
         expect(lock).to receive(:lock).and_yield
 
@@ -30,7 +48,7 @@ module Bosh::Director
 
       it 'should support a deployment name' do
         lock = double(:lock)
-        allow(Lock).to receive(:new).with('lock:deployment:bar', { timeout: 5, deployment_name: 'bar' }).
+        allow(Lock).to receive(:new).with('lock:deployment:bar', timeout: 5, deployment_name: 'bar', blocked_by: 'lock:deployment:bar:instance:%').
           and_return(lock)
         expect(lock).to receive(:lock).and_yield
 

@@ -95,6 +95,7 @@ module Bosh::Monitor
       @deployment_name_to_deployments[deployment_name].instances
     end
 
+    # scheduled by runner
     def analyze_agents
       @logger.info('Analyzing agents...')
       started = Time.now
@@ -137,6 +138,7 @@ module Bosh::Monitor
       true
     end
 
+    # scheduled by runner
     def analyze_instances
       @logger.info('Analyzing instances...')
       started = Time.now

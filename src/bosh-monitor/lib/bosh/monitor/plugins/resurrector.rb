@@ -56,7 +56,7 @@ module Bosh::Monitor
           state = @alert_tracker.state_for(deployment)
 
           if state.meltdown?
-            summary = "Skipping resurrection for instance: '#{job}/#{id}'; #{state.summary}"
+            summary = "In meltdown, skipping resurrection for instance: '#{job}/#{id}'; #{state.summary}"
             @processor.process(
               :alert,
               severity: 1,

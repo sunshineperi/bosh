@@ -18,6 +18,7 @@ module Bosh::Director
       @uid = SecureRandom.uuid
       @timeout = opts[:timeout] || 1.0
       @expiration = opts[:expiration] || 240.0
+      @blocked_by = opts[:blocked_by]
       @logger = Config.logger
       @refresh_thread = nil
       @deployment_name = opts.fetch(:deployment_name, nil)
@@ -118,9 +119,17 @@ module Bosh::Director
       lock_expiration = Time.now.to_f + @expiration + 1
       acquired = false
       until acquired
+
+        blocked = false
         begin
           Models::Lock.create(name: @name, uid: @uid, expired_at: Time.at(lock_expiration), task_id: @task_id.to_s)
-          acquired = true
+          blocked = blocked_by_lock_exists?
+          #TODO should code refactor this
+          if blocked
+            delete
+          else
+            acquired = true
+          end
         rescue Sequel::DatabaseError
           affected_locks = Models::Lock.where(name: @name).where { expired_at < Time.now }.update(uid: @uid, expired_at: Time.at(lock_expiration))
           if affected_locks == 1
@@ -128,17 +137,29 @@ module Bosh::Director
           end
         end
 
+        # create failed and we couldn't steal expired lock
         unless acquired
           if Time.now - started > @timeout
             lock_message = ""
             current_lock.tap do |lock|
-              lock_message = lock ? "Locking task id is #{lock.task_id}" : "Lock is gone"
+
+              lock_message = if lock
+                "Locking task id is #{lock.task_id}"
+              else
+                if blocked
+                  "Blocked by other locks"
+                else
+                  "Lock is gone"
+                end
+              end
             end
             raise TimeoutError, "Failed to acquire lock for #{@name} uid: #{@uid}. #{lock_message}"
           end
           sleep(0.5)
           lock_expiration = Time.now.to_f + @expiration + 1
         end
+        # we increased expiration
+        # or raised already because of the timeout
       end
 
       @lock_expiration = lock_expiration
@@ -154,6 +175,10 @@ module Bosh::Director
           deployment: @deployment_name,
         }
       )
+    end
+
+    def blocked_by_lock_exists?
+      @blocked_by && Models::Lock.where(Sequel.like(:name, @blocked_by)).where { expired_at > Time.now }.count > 0
     end
 
     def delete

@@ -67,6 +67,66 @@ module Bosh::Director
       expect(ran_once).to be(true)
     end
 
+    context 'when using blocked_by' do
+      let(:lock_foo) { Lock.new('foo', deployment_name: 'my-deployment', blocked_by: 'bar') }
+
+      context 'no blocked_by lock exist' do
+        it 'should acquire lock' do
+          lock_foo_acquired = false
+
+          lock_foo.lock do
+            lock_foo_acquired = true
+          end
+
+          expect(lock_foo_acquired).to be(true)
+        end
+      end
+
+      context 'blocked_by lock exist' do
+        it 'should not acquire lock' do
+          lock_foo_acquired = false
+          lock_bar = Lock.new('bar', deployment_name: 'my-deployment', task_id: 1)
+
+          expect do
+            lock_bar.lock { lock_foo.lock { lock_foo_acquired = true } }
+          end.to raise_exception(Lock::TimeoutError, /Failed to acquire lock for foo uid: .* Blocked by other locks/)
+          expect(lock_foo_acquired).to be(false)
+        end
+
+        context 'blocked_by lock gets created simultaneously with actual lock' do
+          let(:lock_foo) { Lock.new('foo', deployment_name: 'my-deployment', blocked_by: 'bar') }
+
+          it 'should not acquire lock' do
+            original_method = Models::Lock.method(:create)
+            expect(Models::Lock).to receive(:create).at_least(3).times do |*args, &block|
+              # should lock 'bar' here as it is used as blocked_by for 'foo'
+              if args[0][:name] == 'foo'
+                bar_args = [{ :name => 'bar',
+                  :uid => SecureRandom.uuid,
+                  :expired_at => Time.at(Time.now.to_f + 60),
+                  :task_id => '2' }]
+                original_method.call(*bar_args, &block)
+              end
+
+              original_method.call(*args, &block)
+            end
+
+            lock_foo_acquired = false
+            expect do
+              lock_foo.lock { lock_foo_acquired = true }
+            end.to raise_exception(Lock::TimeoutError, /Failed to acquire lock for foo uid: .*/)
+
+            expect(lock_foo_acquired).to be(false)
+
+            # clean up
+            expect(Models::Lock.where(name: 'foo').delete).to be(0) # should be no lock on foo
+            expect(Models::Lock.where(name: 'bar').delete).to be(1) # blocked_by lock on 'bar' must be manually deleted
+          end
+        end
+
+      end
+    end
+
     it 'should return info about gone task' do
       lock_a = Lock.new('foo')
       lock_b = Lock.new('foo')

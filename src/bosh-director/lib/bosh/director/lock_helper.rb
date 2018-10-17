@@ -10,7 +10,21 @@ module Bosh::Director
       end
       timeout = opts[:timeout] || 10
       Config.logger.info("Acquiring deployment lock on #{name}")
-      Lock.new("lock:deployment:#{name}", {:timeout => timeout, :deployment_name => name }).lock { yield }
+      Lock.new("lock:deployment:#{name}",
+        timeout: timeout,
+        deployment_name: name,
+        blocked_by: "lock:deployment:#{name}:instance:%"
+      ).lock { yield }
+    end
+
+    def with_instance_lock(deployment, instance_id, opts = {})
+      timeout = opts[:timeout] || 10
+      Config.logger.info("Acquiring instance lock on #{instance_id} of #{deployment}")
+      Lock.new("lock:deployment:#{deployment}:instance:#{instance_id}",
+        timeout: timeout,
+        deployment_name: deployment,
+        blocked_by: "lock:deployment:#{deployment}"
+      ).lock { yield }
     end
 
     def with_network_lock(name, opts = {})
