@@ -13,6 +13,7 @@ resource "aws_db_instance" "mysql" {
   username               = "${var.rds_mysql_username}"
   password               = "${var.rds_mysql_password}"
   parameter_group_name   = "brats-mysql"
+  backup_retention_period = 0
   vpc_security_group_ids = ["${aws_security_group.allow-db-access.id}"]
   db_subnet_group_name   = "${aws_db_subnet_group.default.id}"
   publicly_accessible    = true
