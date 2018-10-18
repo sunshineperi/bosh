@@ -2,26 +2,6 @@ variable "rds_mysql_username" {}
 variable "rds_mysql_password" {}
 variable "rds_mysql_databasename" {}
 
-resource "aws_db_parameter_group" "default" {
-  name   = "brats-mysql"
-  family = "mysql5.7"
-
-  parameter {
-    name = "log_bin_trust_function_creators"
-    value = 1
-  }
-
-  parameter {
-    name  = "character_set_server"
-    value = "utf8"
-  }
-
-  parameter {
-    name  = "character_set_client"
-    value = "utf8"
-  }
-}
-
 resource "aws_db_instance" "mysql" {
   allocated_storage      = 10
   storage_type           = "gp2"
