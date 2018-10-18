@@ -85,6 +85,15 @@ module Bosh::Director::DeploymentPlan
             expect { AvailabilityZone.parse(availability_zone_spec) }.to raise_error(BD::ValidationInvalidType)
           end
         end
+
+        context 'is set to a valid value' do
+          let(:some_az) { AvailabilityZone.new('dummy-az', 'cpu' => 1) }
+
+          it 'can be reset' do
+            some_az.reset_cloud_properties
+            expect(some_az.cloud_properties).to eq({})
+          end
+        end
       end
 
       describe 'cpi' do

@@ -23,6 +23,9 @@ module Bosh
           private
 
           def assign_zones(desired, existing, networks, availability_zones, job_name)
+            availability_zones&.each do |az|
+              az.reset_cloud_properties
+            end
             if has_static_ips?(networks)
               @logger.debug("Job '#{job_name}' has networks with static IPs, placing instances based on static IP distribution")
               StaticIpsAvailabilityZonePicker.new(@instance_plan_factory, @network_planner, networks, job_name, availability_zones, @logger).place_and_match_in(desired, existing)

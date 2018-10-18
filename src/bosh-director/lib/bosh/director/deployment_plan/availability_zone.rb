@@ -23,6 +23,10 @@ module Bosh::Director
         "az: #{name}"
       end
 
+      def reset_cloud_properties
+        @cloud_properties = {}
+      end
+
       def <=>(other)
         self.name <=> other.name
       end
